@@ -76,6 +76,22 @@ public class DStarLite : MonoBehaviour
         }
         path.Reverse();
         this.path = path;
+
+        // Move along the path
+        StartCoroutine(FollowPath());
+    }
+
+    IEnumerator FollowPath()
+    {
+        foreach (Node node in path)
+        {
+            Vector3 nextPos = WorldPosFromGridPos(new Vector2Int(node.gridX, node.gridY));
+            while (Vector3.Distance(transform.position, nextPos) > 0.05f)
+            {
+                transform.position = Vector3.MoveTowards(transform.position, nextPos, Time.deltaTime * 5f);
+                yield return null;
+            }
+        }
     }
 
     List<Node> GetNeighbors(Node node)
