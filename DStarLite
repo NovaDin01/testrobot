@@ -11,6 +11,22 @@ public class DStarLite : MonoBehaviour
     private List<Vector3> path = new List<Vector3>(); // Путь к цели
     private int currentPathIndex = 0; // Индекс текущей точки в пути
 
+public class Cell
+{
+    public Vector3 position; // Позиция ячейки
+    public bool isObstacle; // Является ли ячейка препятствием
+    public float cost; // Стоимость перемещения до этой ячейки
+    public Cell parent; // Родительская ячейка для построения пути
+
+    public Cell(Vector3 _position, bool _isObstacle)
+    {
+        position = _position;
+        isObstacle = _isObstacle;
+        cost = Mathf.Infinity; // Начальная стоимость бесконечна
+        parent = null; // По умолчанию у ячейки нет родителя
+    }
+}
+
     private Cell[,] grid; // Сетка для хранения информации о клетках
 
     private void Start()
