@@ -80,6 +80,13 @@ public class DStarLite : MonoBehaviour
 
             // Выбираем следующую клетку для перемещения
             currentCell = GetNextCell(currentCell, goalCell);
+
+            // Проверяем, не достигли ли конечной клетки
+            if (currentCell == null)
+            {
+                Debug.LogError("Путь невозможно построить.");
+                return pathCells;
+            }
         }
 
         // Формируем путь из клеток, начиная с конечной и двигаясь к начальной
@@ -147,6 +154,9 @@ public class DStarLite : MonoBehaviour
         // Находим ячейку из сетки по заданной позиции
         int x = Mathf.RoundToInt(position.x);
         int y = Mathf.RoundToInt(position.z);
+
+        x = Mathf.Clamp(x, 0, grid.GetLength(0) - 1); // Ограничиваем x
+        y = Mathf.Clamp(y, 0, grid.GetLength(1) - 1); // Ограничиваем y
 
         return grid[x, y];
     }
