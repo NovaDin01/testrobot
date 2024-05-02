@@ -33,21 +33,41 @@ public class DStarLite : MonoBehaviour
     void MoveToNextNode()
     {
         Vector3 nextPosition = path[currentNodeIndex].position;
-        Vector3 direction = (nextPosition - transform.position).normalized;
-        transform.position += direction * movementSpeed * Time.deltaTime;
 
-        // Проверка, достиг ли кубик следующего узла
-        if (Vector3.Distance(transform.position, nextPosition) < 0.1f)
+        // Проверяем, нет ли препятствий на пути к следующему узлу
+        if (!IsObstacleInPath(transform.position, nextPosition))
         {
-            currentNodeIndex++;
+            Vector3 direction = (nextPosition - transform.position).normalized;
+            transform.position += direction * movementSpeed * Time.deltaTime;
 
-            // Проверка, достиг ли кубик конечной точки
-            if (currentNodeIndex >= path.Count)
+            // Проверка, достиг ли кубик следующего узла
+            if (Vector3.Distance(transform.position, nextPosition) < 0.1f)
             {
-                isMoving = false;
-                Debug.Log("Путь завершен");
+                currentNodeIndex++;
+
+                // Проверка, достиг ли кубик конечной точки
+                if (currentNodeIndex >= path.Count)
+                {
+                    isMoving = false;
+                    Debug.Log("Путь завершен");
+                }
             }
         }
+        else
+        {
+            Debug.Log("Препятствие на пути!");
+        }
+    }
+
+    // Проверка, есть ли препятствия на пути от start до end
+    bool IsObstacleInPath(Vector3 start, Vector3 end)
+    {
+        RaycastHit hit;
+        if (Physics.Raycast(start, end - start, out hit, Vector3.Distance(start, end), obstacleMask))
+        {
+            return true; // Препятствие обнаружено
+        }
+        return false; // Препятствие не обнаружено
     }
 
     List<Node> FindPath(Vector3 start, Vector3 goal)
