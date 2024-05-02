@@ -3,79 +3,190 @@ using System.Collections.Generic;
 
 public class SLAMSimulation : MonoBehaviour
 {
-    public float moveSpeed = 5f;
-    public float obstacleDetectionRange = 1.5f;
-    public LayerMask obstacleMask;
     public Transform finishPoint;
+    public LayerMask obstacleMask;
+    public float nodeSize = 1f;
+    public float moveSpeed = 3f;
 
-    private List<Obstacle> obstaclesDetected = new List<Obstacle>();
+    private List<Vector3> obstaclesDetected = new List<Vector3>();
+    private List<Vector3> path = new List<Vector3>();
+    private int currentNodeIndex = 0;
+
+    void Start()
+    {
+        FindPath(transform.position, finishPoint.position);
+    }
 
     void Update()
     {
         MoveCube();
 
-        DetectObstacles();
+        if (Vector3.Distance(transform.position, path[currentNodeIndex]) < 0.1f)
+        {
+            currentNodeIndex++;
+            if (currentNodeIndex >= path.Count)
+                currentNodeIndex = path.Count - 1;
+        }
     }
 
     void MoveCube()
     {
-        float horizontalInput = Input.GetAxis("Horizontal");
-        float verticalInput = Input.GetAxis("Vertical");
-
-        Vector3 moveDirection = new Vector3(horizontalInput, 0, verticalInput).normalized;
-        transform.Translate(moveDirection * moveSpeed * Time.deltaTime);
+        if (path.Count > 0)
+        {
+            Vector3 nextPos = path[currentNodeIndex];
+            transform.position = Vector3.MoveTowards(transform.position, nextPos, moveSpeed * Time.deltaTime);
+        }
     }
 
-    void DetectObstacles()
+    void FindPath(Vector3 startPos, Vector3 targetPos)
     {
-        // Clear the list of detected obstacles
-        obstaclesDetected.Clear();
+        Node startNode = new Node(GridPosFromWorldPos(startPos));
+        Node targetNode = new Node(GridPosFromWorldPos(targetPos));
 
-        // Cast rays around the cube to detect obstacles
-        RaycastHit hit;
-        Vector3[] directions = { transform.forward, transform.right, -transform.forward, -transform.right };
-        foreach (Vector3 direction in directions)
+        List<Node> openSet = new List<Node>();
+        HashSet<Node> closedSet = new HashSet<Node>();
+
+        openSet.Add(startNode);
+
+        while (openSet.Count > 0)
         {
-            if (Physics.Raycast(transform.position, direction, out hit, obstacleDetectionRange, obstacleMask))
+            Node currentNode = openSet[0];
+            for (int i = 1; i < openSet.Count; i++)
             {
-                Obstacle obstacle = new Obstacle(hit.point, hit.normal);
-                obstaclesDetected.Add(obstacle);
+                if (openSet[i].fCost < currentNode.fCost || openSet[i].fCost == currentNode.fCost && openSet[i].hCost < currentNode.hCost)
+                {
+                    currentNode = openSet[i];
+                }
+            }
+
+            openSet.Remove(currentNode);
+            closedSet.Add(currentNode);
+
+            if (currentNode == targetNode)
+            {
+                RetracePath(startNode, targetNode);
+                return;
+            }
+
+            foreach (Node neighbor in GetNeighbors(currentNode))
+            {
+                if (closedSet.Contains(neighbor))
+                    continue;
+
+                float newMovementCostToNeighbor = currentNode.gCost + GetDistance(currentNode, neighbor);
+                if (newMovementCostToNeighbor < neighbor.gCost || !openSet.Contains(neighbor))
+                {
+                    neighbor.gCost = newMovementCostToNeighbor;
+                    neighbor.hCost = GetDistance(neighbor, targetNode);
+                    neighbor.parent = currentNode;
+
+                    if (!openSet.Contains(neighbor))
+                        openSet.Add(neighbor);
+                }
             }
         }
+    }
+
+    void RetracePath(Node startNode, Node endNode)
+    {
+        List<Vector3> path = new List<Vector3>();
+        Node currentNode = endNode;
+
+        while (currentNode != startNode)
+        {
+            path.Add(WorldPosFromGridPos(new Vector2Int(currentNode.gridX, currentNode.gridY)));
+            currentNode = currentNode.parent;
+        }
+        path.Reverse();
+        this.path = path;
+    }
+
+    List<Node> GetNeighbors(Node node)
+    {
+        List<Node> neighbors = new List<Node>();
+
+        for (int x = -1; x <= 1; x++)
+        {
+            for (int y = -1; y <= 1; y++)
+            {
+                if (x == 0 && y == 0)
+                    continue;
+
+                Vector2Int neighborPos = new Vector2Int(node.gridX + x, node.gridY + y);
+                if (IsNodeWalkable(neighborPos))
+                {
+                    neighbors.Add(new Node(neighborPos));
+                }
+            }
+        }
+
+        return neighbors;
+    }
+
+    bool IsNodeWalkable(Vector2Int pos)
+    {
+        Vector3 worldPos = WorldPosFromGridPos(pos);
+        return !Physics.CheckSphere(worldPos, nodeSize / 2, obstacleMask);
+    }
+
+    float GetDistance(Node nodeA, Node nodeB)
+    {
+        int dstX = Mathf.Abs(nodeA.gridX - nodeB.gridX);
+        int dstY = Mathf.Abs(nodeA.gridY - nodeB.gridY);
+        return dstX + dstY; // Manhattan distance
+    }
+
+    Vector2Int GridPosFromWorldPos(Vector3 worldPos)
+    {
+        return new Vector2Int(Mathf.FloorToInt(worldPos.x / nodeSize), Mathf.FloorToInt(worldPos.z / nodeSize));
+    }
+
+    Vector3 WorldPosFromGridPos(Vector2Int gridPos)
+    {
+        return new Vector3(gridPos.x * nodeSize + nodeSize / 2, 0, gridPos.y * nodeSize + nodeSize / 2);
     }
 
     void OnDrawGizmos()
     {
-        // Draw detected obstacles
-        Gizmos.color = Color.red;
-        foreach (Obstacle obstacle in obstaclesDetected)
-        {
-            Gizmos.DrawSphere(obstacle.position, 0.2f);
-        }
-    }
+        Gizmos.color = Color.blue;
+        Gizmos.DrawWireSphere(transform.position, 0.3f);
 
-    void OnTriggerEnter(Collider other)
-    {
-        if (other.transform == finishPoint)
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(finishPoint.position, 0.3f);
+
+        Gizmos.color = Color.green;
+        foreach (Vector3 obstacle in obstaclesDetected)
         {
-            // Finish reached, print map information
-            Debug.Log("SLAM Simulation Finished");
-            foreach (Obstacle obstacle in obstaclesDetected)
+            Gizmos.DrawCube(obstacle, Vector3.one * (nodeSize - 0.1f));
+        }
+
+        Gizmos.color = Color.yellow;
+        if (path.Count > 0)
+        {
+            for (int i = 0; i < path.Count - 1; i++)
             {
-                Debug.Log("Obstacle position: " + obstacle.position + ", Normal: " + obstacle.normal);
+                Gizmos.DrawLine(path[i], path[i + 1]);
             }
         }
     }
 
-    public class Obstacle
+    public class Node
     {
-        public Vector3 position;
-        public Vector3 normal;
+        public int gridX;
+        public int gridY;
+        public float gCost;
+        public float hCost;
+        public Node parent;
 
-        public Obstacle(Vector3 position, Vector3 normal)
+        public Node(Vector2Int pos)
         {
-            this.position = position;
-            this.normal = normal;
+            gridX = pos.x;
+            gridY = pos.y;
+        }
+
+        public float fCost
+        {
+            get { return gCost + hCost; }
         }
     }
 }
