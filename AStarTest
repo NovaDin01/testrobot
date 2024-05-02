@@ -1,0 +1,196 @@
+using UnityEngine;
+using System.Collections.Generic;
+
+public class AStarTest : MonoBehaviour
+{
+    public Transform target; // Цель (выход из лабиринта)
+    public LayerMask obstacleMask; // Слои препятствий
+    public float nodeRadius = 1f; // Радиус узла графа
+    public float movementSpeed = 5f; // Скорость перемещения
+
+    private List<Node> graph = new List<Node>(); // Граф лабиринта
+    private Node startNode; // Стартовый узел
+    private Node targetNode; // Узел, ведущий к выходу
+    private List<Node> path = new List<Node>(); // Путь к выходу
+    private int currentPathIndex = 0; // Текущий индекс узла в пути
+
+    void Start()
+    {
+        // Создаем граф лабиринта
+        CreateGraph();
+
+        // Находим стартовый и целевой узлы
+        startNode = GetNearestNode(transform.position);
+        targetNode = GetNearestNode(target.position);
+
+        // Находим кратчайший путь к выходу
+        path = AStar(startNode, targetNode);
+    }
+
+    void Update()
+    {
+        // Если путь к цели найден, перемещаемся вдоль него
+        if (path.Count > 0)
+        {
+            if (currentPathIndex < path.Count)
+            {
+                Vector3 targetPosition = path[currentPathIndex].worldPosition;
+                targetPosition.y = transform.position.y; // Сохраняем высоту
+
+                transform.position = Vector3.MoveTowards(transform.position, targetPosition, movementSpeed * Time.deltaTime);
+
+                // Если достигли узла, увеличиваем индекс
+                if (transform.position == targetPosition)
+                {
+                    currentPathIndex++;
+                }
+            }
+        }
+    }
+
+    void CreateGraph()
+    {
+        // Получаем границы лабиринта
+        Bounds bounds = new Bounds(transform.position, Vector3.one * 100f);
+
+        // Создаем граф лабиринта на основе препятствий
+        for (float x = bounds.min.x; x < bounds.max.x; x += nodeRadius * 2)
+        {
+            for (float z = bounds.min.z; z < bounds.max.z; z += nodeRadius * 2)
+            {
+                Vector3 point = new Vector3(x, 0f, z);
+                bool isObstacle = Physics.CheckSphere(point, nodeRadius, obstacleMask);
+                if (!isObstacle)
+                {
+                    Node node = new Node(point);
+                    graph.Add(node);
+                }
+            }
+        }
+
+        // Связываем узлы
+        foreach (Node node in graph)
+        {
+            List<Node> neighbors = new List<Node>();
+            foreach (Node otherNode in graph)
+            {
+                if (node != otherNode && Vector3.Distance(node.worldPosition, otherNode.worldPosition) <= nodeRadius * 2.1f)
+                {
+                    neighbors.Add(otherNode);
+                }
+            }
+            node.neighbors = neighbors;
+        }
+    }
+
+    List<Node> AStar(Node start, Node end)
+    {
+        HashSet<Node> openSet = new HashSet<Node>();
+        HashSet<Node> closedSet = new HashSet<Node>();
+        Dictionary<Node, Node> cameFrom = new Dictionary<Node, Node>();
+
+        Dictionary<Node, float> gScore = new Dictionary<Node, float>();
+        Dictionary<Node, float> fScore = new Dictionary<Node, float>();
+
+        foreach (Node node in graph)
+        {
+            gScore[node] = Mathf.Infinity;
+            fScore[node] = Mathf.Infinity;
+        }
+
+        gScore[start] = 0;
+        fScore[start] = Heuristic(start, end);
+
+        openSet.Add(start);
+
+        while (openSet.Count > 0)
+        {
+            Node current = null;
+            float lowestFScore = Mathf.Infinity;
+
+            foreach (Node node in openSet)
+            {
+                if (fScore[node] < lowestFScore)
+                {
+                    lowestFScore = fScore[node];
+                    current = node;
+                }
+            }
+
+            if (current == end)
+                return ReconstructPath(cameFrom, current);
+
+            openSet.Remove(current);
+            closedSet.Add(current);
+
+            foreach (Node neighbor in current.neighbors)
+            {
+                if (closedSet.Contains(neighbor))
+                    continue;
+
+                float tentativeGScore = gScore[current] + Vector3.Distance(current.worldPosition, neighbor.worldPosition);
+
+                if (!openSet.Contains(neighbor))
+                    openSet.Add(neighbor);
+                else if (tentativeGScore >= gScore[neighbor])
+                    continue;
+
+                cameFrom[neighbor] = current;
+                gScore[neighbor] = tentativeGScore;
+                fScore[neighbor] = gScore[neighbor] + Heuristic(neighbor, end);
+            }
+        }
+
+        // Если путь не найден
+        return null;
+    }
+
+    List<Node> ReconstructPath(Dictionary<Node, Node> cameFrom, Node current)
+    {
+        List<Node> path = new List<Node>();
+        path.Add(current);
+        while (cameFrom.ContainsKey(current))
+        {
+            current = cameFrom[current];
+            path.Add(current);
+        }
+        path.Reverse();
+        return path;
+    }
+
+    float Heuristic(Node a, Node b)
+    {
+        return Vector3.Distance(a.worldPosition, b.worldPosition);
+    }
+
+    Node GetNearestNode(Vector3 position)
+    {
+        Node nearestNode = null;
+        float shortestDistance = Mathf.Infinity;
+
+        foreach (Node node in graph)
+        {
+            float distance = Vector3.Distance(position, node.worldPosition);
+            if (distance < shortestDistance)
+            {
+                shortestDistance = distance;
+                nearestNode = node;
+            }
+        }
+
+        return nearestNode;
+    }
+
+    // Представление узла
+    public class Node
+    {
+        public Vector3 worldPosition;
+        public List<Node> neighbors;
+
+        public Node(Vector3 position)
+        {
+            worldPosition = position;
+            neighbors = new List<Node>();
+        }
+    }
+}
