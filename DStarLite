@@ -1,100 +1,246 @@
-using System.Collections.Generic;
 using UnityEngine;
+using System.Collections.Generic;
 
-public class DStarLite : MonoBehaviour
+public class DStarLiteTest : MonoBehaviour
 {
-    public Transform startPoint; // Начальная точка
-    public Transform goalPoint; // Конечная точка
-    public LayerMask obstacleMask; // Маска препятствий
-    public float obstacleCheckDistance = 1f; // Расстояние между проверками препятствий
-    public float movementSpeed = 2f; // Скорость движения
+    public Transform target; // Цель (выход из лабиринта)
+    public LayerMask obstacleMask; // Слои препятствий
+    public float nodeRadius = 1f; // Радиус узла графа
+    public float movementSpeed = 5f; // Скорость перемещения
 
-    private List<Node> path;
-    private int currentNodeIndex = 0;
-    private bool isMoving = false;
+    private List<Node> graph = new List<Node>(); // Граф лабиринта
+    private Node startNode; // Стартовый узел
+    private Node goalNode; // Целевой узел
+    private Node currentNode; // Текущий узел
+    private List<Node> path = new List<Node>(); // Путь к выходу
+    private int currentPathIndex = 0; // Текущий индекс узла в пути
 
     void Start()
     {
-        path = FindPath(startPoint.position, goalPoint.position);
+        // Создаем граф лабиринта
+        CreateGraph();
+
+        // Находим стартовый и целевой узлы
+        startNode = GetNearestNode(transform.position);
+        goalNode = GetNearestNode(target.position);
+
+        // Инициализируем D* Lite
+        currentNode = startNode;
+        path = DStarLite();
+
+        // Если путь к цели найден, начинаем перемещаться
         if (path != null && path.Count > 0)
-        {
-            isMoving = true;
-        }
+            MoveToNextNode();
     }
 
     void Update()
     {
-        if (isMoving)
+        // Если достигли узла, переходим к следующему
+        if (path != null && currentPathIndex < path.Count)
         {
-            MoveToNextNode();
+            if (Vector3.Distance(transform.position, path[currentPathIndex].worldPosition) < 0.1f)
+            {
+                currentPathIndex++;
+                MoveToNextNode();
+            }
         }
     }
 
     void MoveToNextNode()
     {
-        Vector3 nextPosition = path[currentNodeIndex].position;
-
-        // Проверяем, нет ли препятствий на пути к следующему узлу
-        if (!IsObstacleInPath(transform.position, nextPosition))
+        if (currentPathIndex < path.Count)
         {
-            Vector3 direction = (nextPosition - transform.position).normalized;
-            transform.position += direction * movementSpeed * Time.deltaTime;
+            Vector3 targetPosition = path[currentPathIndex].worldPosition;
+            targetPosition.y = transform.position.y; // Сохраняем высоту
 
-            // Проверка, достиг ли кубик следующего узла
-            if (Vector3.Distance(transform.position, nextPosition) < 0.1f)
+            transform.position = Vector3.MoveTowards(transform.position, targetPosition, movementSpeed * Time.deltaTime);
+        }
+    }
+
+    void CreateGraph()
+    {
+        // Получаем границы лабиринта
+        Bounds bounds = new Bounds(transform.position, Vector3.one * 100f);
+
+        // Создаем граф лабиринта на основе препятствий
+        for (float x = bounds.min.x; x < bounds.max.x; x += nodeRadius * 2)
+        {
+            for (float z = bounds.min.z; z < bounds.max.z; z += nodeRadius * 2)
             {
-                currentNodeIndex++;
-
-                // Проверка, достиг ли кубик конечной точки
-                if (currentNodeIndex >= path.Count)
+                Vector3 point = new Vector3(x, 0f, z);
+                bool isObstacle = Physics.CheckSphere(point, nodeRadius, obstacleMask);
+                if (!isObstacle)
                 {
-                    isMoving = false;
-                    Debug.Log("Путь завершен");
+                    Node node = new Node(point);
+                    graph.Add(node);
                 }
             }
         }
-        else
+
+        // Связываем узлы
+        foreach (Node node in graph)
         {
-            Debug.Log("Препятствие на пути!");
+            List<Node> neighbors = new List<Node>();
+            foreach (Node otherNode in graph)
+            {
+                if (node != otherNode && Vector3.Distance(node.worldPosition, otherNode.worldPosition) <= nodeRadius * 2.1f)
+                {
+                    neighbors.Add(otherNode);
+                }
+            }
+            node.neighbors = neighbors;
         }
     }
 
-    // Проверка, есть ли препятствия на пути от start до end
-    bool IsObstacleInPath(Vector3 start, Vector3 end)
+    List<Node> DStarLite()
     {
-        RaycastHit hit;
-        if (Physics.Raycast(start, end - start, out hit, Vector3.Distance(start, end), obstacleMask))
+        // Инициализация
+        foreach (Node node in graph)
         {
-            return true; // Препятствие обнаружено
+            node.rhs = Mathf.Infinity;
+            node.g = Mathf.Infinity;
+            node.key = new KeyValuePair<float, float>(Mathf.Infinity, Mathf.Infinity);
         }
-        return false; // Препятствие не обнаружено
+
+        goalNode.rhs = 0;
+        goalNode.key = CalculateKey(goalNode);
+
+        // Приоритетная очередь
+        SortedSet<Node> openSet = new SortedSet<Node>(new NodeComparer());
+
+        openSet.Add(goalNode);
+
+        while (openSet.Count > 0 && (openSet.Min.key.CompareTo(CalculateKey(startNode)) < 0 || startNode.rhs != startNode.g))
+        {
+            Node current = openSet.Min;
+            openSet.Remove(current);
+
+            if (current.g > current.rhs)
+            {
+                current.g = current.rhs;
+                foreach (Node neighbor in current.neighbors)
+                {
+                    UpdateVertex(neighbor);
+                }
+            }
+            else
+            {
+                current.g = Mathf.Infinity;
+                UpdateVertex(current);
+                foreach (Node neighbor in current.neighbors)
+                {
+                    UpdateVertex(neighbor);
+                }
+            }
+        }
+
+        // Строим путь
+        List<Node> path = new List<Node>();
+        Node currentPathNode = startNode;
+
+        while (currentPathNode != goalNode)
+        {
+            path.Add(currentPathNode);
+
+            float minCost = Mathf.Infinity;
+            Node nextNode = null;
+
+            foreach (Node neighbor in currentPathNode.neighbors)
+            {
+                if (neighbor.g + Vector3.Distance(currentPathNode.worldPosition, neighbor.worldPosition) < minCost)
+                {
+                    minCost = neighbor.g + Vector3.Distance(currentPathNode.worldPosition, neighbor.worldPosition);
+                    nextNode = neighbor;
+                }
+            }
+
+            currentPathNode = nextNode;
+        }
+
+        path.Add(goalNode);
+
+        return path;
     }
 
-    List<Node> FindPath(Vector3 start, Vector3 goal)
+    void UpdateVertex(Node node)
     {
-        // TODO: Реализовать алгоритм D* Lite
+        if (node != goalNode)
+        {
+            node.rhs = Mathf.Infinity;
+            foreach (Node neighbor in node.neighbors)
+            {
+                node.rhs = Mathf.Min(node.rhs, neighbor.g + Vector3.Distance(node.worldPosition, neighbor.worldPosition));
+            }
+        }
 
-        List<Node> newPath = new List<Node>();
-        // Временно, для примера, используем простой путь от старта до цели
-        newPath.Add(new Node(start));
-        newPath.Add(new Node(goal));
-        return newPath;
+        if (openSet.Contains(node))
+        {
+            openSet.Remove(node);
+        }
+
+        if (node.g != node.rhs)
+        {
+            node.key = CalculateKey(node);
+            openSet.Add(node);
+        }
     }
 
-    // Проверка, является ли позиция препятствием
-    bool IsObstacle(Vector3 position)
+    KeyValuePair<float, float> CalculateKey(Node node)
     {
-        return Physics.CheckSphere(position, obstacleCheckDistance, obstacleMask);
+        float k1 = Mathf.Min(node.g, node.rhs);
+        float k2 = Mathf.Min(node.g, node.rhs);
+
+        return new KeyValuePair<float, float>(k1 + Heuristic(node, startNode), k2);
     }
 
-    // Вспомогательный класс для представления узла (позиции)
+    float Heuristic(Node a, Node b)
+    {
+        return Vector3.Distance(a.worldPosition, b.worldPosition);
+    }
+
+    Node GetNearestNode(Vector3 position)
+    {
+        Node nearestNode = null;
+        float shortestDistance = Mathf.Infinity;
+
+        foreach (Node node in graph)
+        {
+            float distance = Vector3.Distance(position, node.worldPosition);
+            if (distance < shortestDistance)
+            {
+                shortestDistance = distance;
+                nearestNode = node;
+            }
+        }
+
+        return nearestNode;
+    }
+
+    // Представление узла
     public class Node
     {
-        public Vector3 position;
+        public Vector3 worldPosition;
+        public List<Node> neighbors;
+        public float g; // Расстояние от старта до текущего узла
+        public float rhs; // Следующее лучшее расстояние от старта до текущего узла
+        public KeyValuePair<float, float> key; // Ключ для определения приоритета в очереди
 
-        public Node(Vector3 _position)
+        public Node(Vector3 position)
         {
-            position = _position;
+            worldPosition = position;
+            neighbors = new List<Node>();
+        }
+    }
+
+    // Сравнитель для сортировки узлов по ключу
+    public class NodeComparer : IComparer<Node>
+    {
+        public int Compare(Node x, Node y)
+        {
+            int result = x.key.Key.CompareTo(y.key.Key);
+            if (result == 0)
+                return x.key.Value.CompareTo(y.key.Value);
+            return result;
         }
     }
 }
