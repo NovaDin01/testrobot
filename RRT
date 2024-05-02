@@ -67,12 +67,7 @@ public class RRT : MonoBehaviour
                 bool isObstacle = Physics.CheckSphere(point, nodeRadius, obstacleMask);
                 if (!isObstacle)
                 {
-                    Node newNode = new Node(point);
-                    graph.Add(newNode);
-
-                    // Визуализируем узел
-                    GameObject nodeObj = Instantiate(nodePrefab, point, Quaternion.identity);
-                    nodeObj.transform.localScale = new Vector3(nodeRadius * 2, nodeRadius * 2, nodeRadius * 2);
+                    graph.Add(new Node(point));
                 }
             }
         }
@@ -103,12 +98,26 @@ public class RRT : MonoBehaviour
                 // Проверяем, достигли ли мы цели
                 if (Vector3.Distance(newPoint, goal.worldPosition) < nodeRadius)
                 {
-                    return BuildPath(newNode); // Строим путь и возвращаем его
+                    if (!IsPathObstructed(newPoint, goal.worldPosition)) // Дополнительная проверка на доступность целевого узла
+                    {
+                        return BuildPath(newNode); // Строим путь и возвращаем его
+                    }
                 }
             }
         }
 
         return path; // Если не удалось найти путь, возвращаем пустой список
+    }
+
+    bool IsPathObstructed(Vector3 start, Vector3 end)
+    {
+        // Проверяем, есть ли препятствия между двумя точками
+        RaycastHit hit;
+        if (Physics.Linecast(start, end, out hit, obstacleMask))
+        {
+            return true; // Препятствие обнаружено
+        }
+        return false; // Препятствие не обнаружено
     }
 
     List<Node> BuildPath(Node endNode)
