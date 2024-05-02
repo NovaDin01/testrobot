@@ -1,4 +1,5 @@
 using UnityEngine;
+using System;
 using System.Collections.Generic;
 
 public class DStarLiteTest : MonoBehaviour
@@ -103,7 +104,7 @@ public class DStarLiteTest : MonoBehaviour
         {
             node.rhs = Mathf.Infinity;
             node.g = Mathf.Infinity;
-            node.key = new KeyValuePair<float, float>(Mathf.Infinity, Mathf.Infinity);
+            node.key = new NodeKey(Mathf.Infinity, Mathf.Infinity);
         }
 
         goalNode.rhs = 0;
@@ -187,12 +188,12 @@ public class DStarLiteTest : MonoBehaviour
         }
     }
 
-    KeyValuePair<float, float> CalculateKey(Node node)
+    NodeKey CalculateKey(Node node)
     {
         float k1 = Mathf.Min(node.g, node.rhs);
         float k2 = Mathf.Min(node.g, node.rhs);
 
-        return new KeyValuePair<float, float>(k1 + Heuristic(node, startNode), k2);
+        return new NodeKey(k1 + Heuristic(node, startNode), k2);
     }
 
     float Heuristic(Node a, Node b)
@@ -225,7 +226,7 @@ public class DStarLiteTest : MonoBehaviour
         public List<Node> neighbors;
         public float g; // Расстояние от старта до текущего узла
         public float rhs; // Следующее лучшее расстояние от старта до текущего узла
-        public KeyValuePair<float, float> key; // Ключ для определения приоритета в очереди
+        public NodeKey key; // Ключ для определения приоритета в очереди
 
         public Node(Vector3 position)
         {
@@ -234,16 +235,35 @@ public class DStarLiteTest : MonoBehaviour
         }
     }
 
+    // Класс ключа для узла
+    public class NodeKey : IComparable<NodeKey>
+    {
+        public float k1;
+        public float k2;
+
+        public NodeKey(float k1, float k2)
+        {
+            this.k1 = k1;
+            this.k2 = k2;
+        }
+
+        public int CompareTo(NodeKey other)
+        {
+            if (k1 < other.k1 || (k1 == other.k1 && k2 < other.k2))
+                return -1;
+            else if (k1 == other.k1 && k2 == other.k2)
+                return 0;
+            else
+                return 1;
+        }
+    }
+
     // Сравнитель для сортировки узлов по ключу
     public class NodeComparer : IComparer<Node>
     {
         public int Compare(Node x, Node y)
         {
-            int result = x.key.Key.CompareTo(y.key.Key);
-            if (result == 0)
-                return x.key.Value.CompareTo(y.key.Value);
-            else
-                return result;
+            return x.key.CompareTo(y.key);
         }
     }
 }
