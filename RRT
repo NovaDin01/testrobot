@@ -67,7 +67,12 @@ public class RRT : MonoBehaviour
                 bool isObstacle = Physics.CheckSphere(point, nodeRadius, obstacleMask);
                 if (!isObstacle)
                 {
-                    graph.Add(new Node(point));
+                    Node newNode = new Node(point);
+                    graph.Add(newNode);
+
+                    // Визуализируем узел
+                    GameObject nodeObj = Instantiate(nodePrefab, point, Quaternion.identity);
+                    nodeObj.transform.localScale = new Vector3(nodeRadius * 2, nodeRadius * 2, nodeRadius * 2);
                 }
             }
         }
@@ -157,10 +162,6 @@ public class RRT : MonoBehaviour
         {
             worldPosition = position;
             parent = null;
-
-            // Визуализируем узел
-            GameObject nodeObj = Instantiate(nodePrefab, position, Quaternion.identity);
-            nodeObj.transform.localScale = new Vector3(nodeRadius * 2, nodeRadius * 2, nodeRadius * 2);
         }
     }
 }
