@@ -1,0 +1,196 @@
+using UnityEngine;
+using System.Collections.Generic;
+
+public class DStarLite : MonoBehaviour
+{
+    public Transform start; // Начальная позиция
+    public Transform goal; // Цель
+    public LayerMask obstacleMask; // Слои препятствий
+    public float moveSpeed = 5f; // Скорость перемещения
+
+    private List<Vector3> path = new List<Vector3>(); // Путь к цели
+    private int currentPathIndex = 0; // Индекс текущей точки в пути
+
+    private Cell[,] grid; // Сетка для хранения информации о клетках
+
+    private void Start()
+    {
+        InitializeGrid();
+        CalculatePath();
+    }
+
+    private void InitializeGrid()
+    {
+        // Определяем размер сетки в зависимости от размеров сцены
+        int width = Mathf.RoundToInt(transform.localScale.x);
+        int height = Mathf.RoundToInt(transform.localScale.z);
+
+        grid = new Cell[width, height];
+
+        // Заполняем сетку клетками
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                Vector3 cellPosition = new Vector3(x, 0, y);
+                bool isObstacle = Physics.CheckSphere(cellPosition, 0.5f, obstacleMask);
+                grid[x, y] = new Cell(cellPosition, isObstacle);
+            }
+        }
+    }
+
+    private void CalculatePath()
+    {
+        // Запускаем алгоритм поиска пути
+        List<Cell> pathCells = DStarLiteAlgorithm();
+
+        // Преобразуем путь из ячеек в координаты
+        foreach (Cell cell in pathCells)
+        {
+            path.Add(cell.position);
+        }
+    }
+
+    private List<Cell> DStarLiteAlgorithm()
+    {
+        // Реализация D-star Lite алгоритма
+        List<Cell> pathCells = new List<Cell>();
+
+        // Начальная и конечная клетки
+        Cell startCell = grid[Mathf.RoundToInt(start.position.x), Mathf.RoundToInt(start.position.z)];
+        Cell goalCell = grid[Mathf.RoundToInt(goal.position.x), Mathf.RoundToInt(goal.position.z)];
+
+        Cell currentCell = startCell;
+
+        while (currentCell != goalCell)
+        {
+            // Получаем соседние клетки
+            List<Cell> neighbours = GetNeighbours(currentCell);
+
+            // Рассчитываем стоимость перемещения до соседних клеток
+            foreach (Cell neighbour in neighbours)
+            {
+                float newCost = currentCell.cost + HeuristicCost(currentCell, neighbour);
+                if (newCost < neighbour.cost || neighbour.cost == Mathf.Infinity)
+                {
+                    neighbour.cost = newCost;
+                    neighbour.parent = currentCell;
+                }
+            }
+
+            // Выбираем следующую клетку для перемещения
+            currentCell = GetNextCell(currentCell, goalCell);
+        }
+
+        // Формируем путь из клеток, начиная с конечной и двигаясь к начальной
+        while (currentCell != null)
+        {
+            pathCells.Insert(0, currentCell);
+            currentCell = currentCell.parent;
+        }
+
+        return pathCells;
+    }
+
+    private List<Cell> GetNeighbours(Cell cell)
+    {
+        // Получаем соседние клетки
+        List<Cell> neighbours = new List<Cell>();
+
+        for (int x = -1; x <= 1; x++)
+        {
+            for (int y = -1; y <= 1; y++)
+            {
+                if (x == 0 && y == 0)
+                    continue;
+
+                int checkX = cell.position.x + x;
+                int checkY = cell.position.z + y;
+
+                if (checkX >= 0 && checkX < grid.GetLength(0) && checkY >= 0 && checkY < grid.GetLength(1))
+                {
+                    neighbours.Add(grid[checkX, checkY]);
+                }
+            }
+        }
+
+        return neighbours;
+    }
+
+    private Cell GetNextCell(Cell current, Cell goal)
+    {
+        // Находим следующую клетку для перемещения
+        List<Cell> neighbours = GetNeighbours(current);
+        Cell nextCell = null;
+        float minCost = Mathf.Infinity;
+
+        foreach (Cell neighbour in neighbours)
+        {
+            if (neighbour.cost < minCost)
+            {
+                minCost = neighbour.cost;
+                nextCell = neighbour;
+            }
+        }
+
+        return nextCell;
+    }
+
+    private float HeuristicCost(Cell current, Cell target)
+    {
+        // Рассчитываем эвристическую стоимость перемещения от текущей клетки к цели
+        return Vector3.Distance(current.position, target.position);
+    }
+
+    private void Update()
+    {
+        // Двигаемся по пути, если он найден
+        if (path.Count > 0 && currentPathIndex < path.Count)
+        {
+            MoveToNextPoint();
+        }
+    }
+
+    private void MoveToNextPoint()
+    {
+        // Двигаемся к следующей точке пути
+        Vector3 targetPosition = path[currentPathIndex];
+        targetPosition.y = transform.position.y;
+        transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
+
+        // Проверяем, достигли ли следующей точки пути
+        if (Vector3.Distance(transform.position, targetPosition) < 0.01f)
+        {
+            currentPathIndex++;
+        }
+    }
+
+    private void OnDrawGizmos()
+    {
+        // Отрисовываем путь
+        Gizmos.color = Color.blue;
+        for (int i = 0; i < path.Count - 1; i++)
+        {
+            Gizmos.DrawLine(path[i], path[i + 1]);
+        }
+
+        // Отрисовываем старт и финиш
+        Gizmos.color = Color.red;
+        Gizmos.DrawSphere(start.position, 0.5f);
+        Gizmos.DrawSphere(goal.position, 0.5f);
+
+        // Отрисовываем сетку
+        if (grid != null)
+        {
+            foreach (Cell cell in grid)
+            {
+                if (cell.isObstacle)
+                {
+                    Gizmos.color = Color.black;
+                    Gizmos.DrawCube(cell.position, Vector3.one * 0.9f);
+                }
+            }
+        }
+    }
+
+    // Класс для представ
