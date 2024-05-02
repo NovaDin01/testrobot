@@ -14,43 +14,22 @@ public class RRT : MonoBehaviour
     private List<Vector3> path = new List<Vector3>(); // Путь к цели
     private int currentPathIndex = 0; // Текущий индекс узла в пути
 
+    private bool isRunning = true; // Флаг, определяющий, идет ли процесс поиска пути
+
     void Start()
     {
-        // Инициализируем дерево с начальным узлом
+        StartCoroutine(BuildRRT());
+    }
+
+    IEnumerator BuildRRT()
+    {
+        nodes.Clear();
+        branches.Clear();
+        path.Clear();
         nodes.Add(start.position);
         branches.Add(new List<Vector3>());
         branches[0].Add(start.position);
 
-        // Запускаем алгоритм RRT
-        BuildRRT();
-
-        // Находим путь к цели
-        path = FindPath();
-    }
-
-    void Update()
-    {
-        // Если путь к цели найден, перемещаемся по нему
-        if (path.Count > 0)
-        {
-            if (currentPathIndex < path.Count)
-            {
-                Vector3 targetPosition = path[currentPathIndex];
-                targetPosition.y = transform.position.y; // Сохраняем высоту
-
-                transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
-
-                // Если достигли узла, увеличиваем индекс
-                if (transform.position == targetPosition)
-                {
-                    currentPathIndex++;
-                }
-            }
-        }
-    }
-
-    void BuildRRT()
-    {
         int iterations = 1000; // Количество итераций алгоритма
 
         for (int i = 0; i < iterations; i++)
@@ -80,6 +59,33 @@ public class RRT : MonoBehaviour
                     branches[branches.Count - 1].Add(newNode);
                     branches[branches.Count - 1].Add(goal.position);
                     break;
+                }
+            }
+
+            yield return null;
+        }
+
+        // Находим путь к цели
+        path = FindPath();
+        isRunning = false;
+    }
+
+    void Update()
+    {
+        // Если путь к цели найден, перемещаемся по нему
+        if (!isRunning && path.Count > 0)
+        {
+            if (currentPathIndex < path.Count)
+            {
+                Vector3 targetPosition = path[currentPathIndex];
+                targetPosition.y = transform.position.y; // Сохраняем высоту
+
+                transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
+
+                // Если достигли узла, увеличиваем индекс
+                if (transform.position == targetPosition)
+                {
+                    currentPathIndex++;
                 }
             }
         }
