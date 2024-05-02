@@ -1,289 +1,164 @@
 using UnityEngine;
-using System;
 using System.Collections.Generic;
 
-public class DStarLiteTest : MonoBehaviour
+public class DStarLite : MonoBehaviour
 {
-    public Transform target; // Цель (выход из лабиринта)
-    public LayerMask obstacleMask; // Слои препятствий
-    public float nodeRadius = 1f; // Радиус узла графа
-    public float movementSpeed = 5f; // Скорость перемещения
+    public Transform start;
+    public Transform goal;
+    public LayerMask obstacleMask;
+    public float nodeSize = 1f;
 
-    private List<Node> graph = new List<Node>(); // Граф лабиринта
-    private Node startNode; // Стартовый узел
-    private Node goalNode; // Целевой узел
-    private Node currentNode; // Текущий узел
-    private List<Node> path = new List<Node>(); // Путь к выходу
-    private int currentPathIndex = 0; // Текущий индекс узла в пути
-
-    private SortedSet<Node> openSet; // Приоритетная очередь
+    private List<Node> path;
 
     void Start()
     {
-        // Создаем граф лабиринта
-        CreateGraph();
-
-        // Находим стартовый и целевой узлы
-        startNode = GetNearestNode(transform.position);
-        goalNode = GetNearestNode(target.position);
-
-        // Инициализируем D* Lite
-        currentNode = startNode;
-        openSet = new SortedSet<Node>(new NodeComparer());
-
-        path = DStarLite();
-
-        // Если путь к цели найден, начинаем перемещаться
-        if (path != null && path.Count > 0)
-            MoveToNextNode();
+        FindPath(start.position, goal.position);
     }
 
-    void Update()
+    void FindPath(Vector3 startPos, Vector3 targetPos)
     {
-        // Если достигли узла, переходим к следующему
-        if (path != null && currentPathIndex < path.Count)
+        Node startNode = new Node(GridPosFromWorldPos(startPos));
+        Node targetNode = new Node(GridPosFromWorldPos(targetPos));
+
+        List<Node> openSet = new List<Node>();
+        HashSet<Node> closedSet = new HashSet<Node>();
+
+        openSet.Add(startNode);
+
+        while (openSet.Count > 0)
         {
-            if (Vector3.Distance(transform.position, path[currentPathIndex].worldPosition) < 0.1f)
+            Node currentNode = openSet[0];
+            for (int i = 1; i < openSet.Count; i++)
             {
-                currentPathIndex++;
-                MoveToNextNode();
-            }
-        }
-    }
-
-    void MoveToNextNode()
-    {
-        if (currentPathIndex < path.Count)
-        {
-            Vector3 targetPosition = path[currentPathIndex].worldPosition;
-            targetPosition.y = transform.position.y; // Сохраняем высоту
-
-            transform.position = Vector3.MoveTowards(transform.position, targetPosition, movementSpeed * Time.deltaTime);
-        }
-    }
-
-    void CreateGraph()
-    {
-        // Получаем границы лабиринта
-        Bounds bounds = new Bounds(transform.position, Vector3.one * 100f);
-
-        // Создаем граф лабиринта на основе препятствий
-        for (float x = bounds.min.x; x < bounds.max.x; x += nodeRadius * 2)
-        {
-            for (float z = bounds.min.z; z < bounds.max.z; z += nodeRadius * 2)
-            {
-                Vector3 point = new Vector3(x, 0f, z);
-                bool isObstacle = Physics.CheckSphere(point, nodeRadius, obstacleMask);
-                if (!isObstacle)
+                if (openSet[i].fCost < currentNode.fCost || openSet[i].fCost == currentNode.fCost && openSet[i].hCost < currentNode.hCost)
                 {
-                    Node node = new Node(point);
-                    graph.Add(node);
+                    currentNode = openSet[i];
+                }
+            }
+
+            openSet.Remove(currentNode);
+            closedSet.Add(currentNode);
+
+            if (currentNode == targetNode)
+            {
+                RetracePath(startNode, targetNode);
+                return;
+            }
+
+            foreach (Node neighbor in GetNeighbors(currentNode))
+            {
+                if (closedSet.Contains(neighbor))
+                    continue;
+
+                float newMovementCostToNeighbor = currentNode.gCost + GetDistance(currentNode, neighbor);
+                if (newMovementCostToNeighbor < neighbor.gCost || !openSet.Contains(neighbor))
+                {
+                    neighbor.gCost = newMovementCostToNeighbor;
+                    neighbor.hCost = GetDistance(neighbor, targetNode);
+                    neighbor.parent = currentNode;
+
+                    if (!openSet.Contains(neighbor))
+                        openSet.Add(neighbor);
                 }
             }
         }
-
-        // Связываем узлы
-        foreach (Node node in graph)
-        {
-            List<Node> neighbors = new List<Node>();
-            foreach (Node otherNode in graph)
-            {
-                if (node != otherNode && Vector3.Distance(node.worldPosition, otherNode.worldPosition) <= nodeRadius * 2.1f)
-                {
-                    neighbors.Add(otherNode);
-                }
-            }
-            node.neighbors = neighbors;
-        }
     }
 
-    List<Node> DStarLite()
+    void RetracePath(Node startNode, Node endNode)
     {
-        // Инициализация
-        foreach (Node node in graph)
-        {
-            node.rhs = Mathf.Infinity;
-            node.g = Mathf.Infinity;
-            node.key = new NodeKey(Mathf.Infinity, Mathf.Infinity);
-        }
-
-        goalNode.rhs = 0;
-        goalNode.key = CalculateKey(goalNode);
-
-        openSet.Clear();
-        openSet.Add(goalNode);
-
-        while (openSet.Count > 0 && (openSet.Min.key.CompareTo(CalculateKey(startNode)) < 0 || startNode.rhs != startNode.g))
-        {
-            Node current = openSet.Min;
-            openSet.Remove(current);
-
-            if (current.g > current.rhs)
-            {
-                current.g = current.rhs;
-                foreach (Node neighbor in current.neighbors)
-                {
-                    UpdateVertex(neighbor);
-                }
-            }
-            else
-            {
-                current.g = Mathf.Infinity;
-                UpdateVertex(current);
-                foreach (Node neighbor in current.neighbors)
-                {
-                    UpdateVertex(neighbor);
-                }
-            }
-        }
-
-        // Строим путь
         List<Node> path = new List<Node>();
-        Node currentPathNode = startNode;
+        Node currentNode = endNode;
 
-        while (currentPathNode != goalNode)
+        while (currentNode != startNode)
         {
-            path.Add(currentPathNode);
+            path.Add(currentNode);
+            currentNode = currentNode.parent;
+        }
+        path.Reverse();
+        this.path = path;
+    }
 
-            float minCost = Mathf.Infinity;
-            Node nextNode = null;
+    List<Node> GetNeighbors(Node node)
+    {
+        List<Node> neighbors = new List<Node>();
 
-            foreach (Node neighbor in currentPathNode.neighbors)
+        for (int x = -1; x <= 1; x++)
+        {
+            for (int y = -1; y <= 1; y++)
             {
-                if (neighbor.g + Vector3.Distance(currentPathNode.worldPosition, neighbor.worldPosition) < minCost)
+                if (x == 0 && y == 0)
+                    continue;
+
+                Vector2Int neighborPos = new Vector2Int(node.gridX + x, node.gridY + y);
+                if (IsNodeWalkable(neighborPos))
                 {
-                    minCost = neighbor.g + Vector3.Distance(currentPathNode.worldPosition, neighbor.worldPosition);
-                    nextNode = neighbor;
+                    neighbors.Add(new Node(neighborPos));
                 }
             }
-
-            currentPathNode = nextNode;
         }
 
-        path.Add(goalNode);
-
-        return path;
+        return neighbors;
     }
 
-    void UpdateVertex(Node node)
+    bool IsNodeWalkable(Vector2Int pos)
     {
-        if (node != goalNode)
+        Vector3 worldPos = WorldPosFromGridPos(pos);
+        return !Physics.CheckSphere(worldPos, nodeSize / 2, obstacleMask);
+    }
+
+    float GetDistance(Node nodeA, Node nodeB)
+    {
+        int dstX = Mathf.Abs(nodeA.gridX - nodeB.gridX);
+        int dstY = Mathf.Abs(nodeA.gridY - nodeB.gridY);
+        return dstX + dstY; // Manhattan distance
+    }
+
+    Vector2Int GridPosFromWorldPos(Vector3 worldPos)
+    {
+        return new Vector2Int(Mathf.FloorToInt(worldPos.x / nodeSize), Mathf.FloorToInt(worldPos.z / nodeSize));
+    }
+
+    Vector3 WorldPosFromGridPos(Vector2Int gridPos)
+    {
+        return new Vector3(gridPos.x * nodeSize + nodeSize / 2, 0, gridPos.y * nodeSize + nodeSize / 2);
+    }
+
+    void OnDrawGizmos()
+    {
+        Gizmos.color = Color.blue;
+        Gizmos.DrawWireCube(start.position, Vector3.one * nodeSize);
+
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireCube(goal.position, Vector3.one * nodeSize);
+
+        if (path != null)
         {
-            node.rhs = Mathf.Infinity;
-            foreach (Node neighbor in node.neighbors)
+            foreach (Node node in path)
             {
-                node.rhs = Mathf.Min(node.rhs, neighbor.g + Vector3.Distance(node.worldPosition, neighbor.worldPosition));
+                Vector3 nodePos = WorldPosFromGridPos(new Vector2Int(node.gridX, node.gridY));
+                Gizmos.color = Color.white;
+                Gizmos.DrawCube(nodePos, Vector3.one * (nodeSize - 0.1f));
             }
         }
-
-        if (openSet.Contains(node))
-        {
-            openSet.Remove(node);
-        }
-
-        if (node.g != node.rhs)
-        {
-            node.key = CalculateKey(node);
-            openSet.Add(node);
-        }
     }
 
-    NodeKey CalculateKey(Node node)
-    {
-        float k1 = Mathf.Min(node.g, node.rhs);
-        float k2 = Mathf.Min(node.g, node.rhs);
-
-        return new NodeKey(k1 + Heuristic(node, startNode), k2);
-    }
-
-    float Heuristic(Node a, Node b)
-    {
-        return Vector3.Distance(a.worldPosition, b.worldPosition);
-    }
-
-    Node GetNearestNode(Vector3 position)
-    {
-        Node nearestNode = null;
-        float shortestDistance = Mathf.Infinity;
-
-        foreach (Node node in graph)
-        {
-            float distance = Vector3.Distance(position, node.worldPosition);
-            if (distance < shortestDistance)
-            {
-                shortestDistance = distance;
-                nearestNode = node;
-            }
-        }
-
-        return nearestNode;
-    }
-
-    // Представление узла
     public class Node
     {
-        public Vector3 worldPosition;
-        public List<Node> neighbors;
-        public float g; // Расстояние от старта до текущего узла
-        public float rhs; // Следующее лучшее расстояние от старта до текущего узла
-        public NodeKey key; // Ключ для определения приоритета в очереди
+        public int gridX;
+        public int gridY;
+        public float gCost;
+        public float hCost;
+        public Node parent;
 
-        public Node(Vector3 position)
+        public Node(Vector2Int pos)
         {
-            worldPosition = position;
-            neighbors = new List<Node>();
-        }
-    }
-
-    // Класс ключа для узла
-    public class NodeKey : IComparable<NodeKey>
-    {
-        public float k1;
-        public float k2;
-
-        public NodeKey(float k1, float k2)
-        {
-            this.k1 = k1;
-            this.k2 = k2;
+            gridX = pos.x;
+            gridY = pos.y;
         }
 
-        public int CompareTo(NodeKey other)
+        public float fCost
         {
-            if (k1 < other.k1 || (k1 == other.k1 && k2 < other.k2))
-                return -1;
-            else if (k1 == other.k1 && k2 == other.k2)
-                return 0;
-            else
-                return 1;
-        }
-    }
-
-    // Сравнитель для сортировки узлов по ключу
-    public class NodeComparer : IComparer<Node>
-    {
-        public int Compare(Node x, Node y)
-        {
-            return x.key.CompareTo(y.key);
-        }
-    }
-
-    // Функция обновления пути
-    void Replan()
-    {
-        // Обновляем граф лабиринта
-        CreateGraph();
-
-        // Инициализируем D* Lite
-        currentNode = startNode;
-        openSet.Clear();
-
-        path = DStarLite();
-
-        // Если путь к цели найден, начинаем перемещаться
-        if (path != null && path.Count > 0)
-        {
-            currentPathIndex = 0;
-            MoveToNextNode();
+            get { return gCost + hCost; }
         }
     }
 }
