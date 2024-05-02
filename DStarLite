@@ -266,4 +266,24 @@ public class DStarLiteTest : MonoBehaviour
             return x.key.CompareTo(y.key);
         }
     }
+
+    // Функция обновления пути
+    void Replan()
+    {
+        // Обновляем граф лабиринта
+        CreateGraph();
+
+        // Инициализируем D* Lite
+        currentNode = startNode;
+        openSet.Clear();
+
+        path = DStarLite();
+
+        // Если путь к цели найден, начинаем перемещаться
+        if (path != null && path.Count > 0)
+        {
+            currentPathIndex = 0;
+            MoveToNextNode();
+        }
+    }
 }
