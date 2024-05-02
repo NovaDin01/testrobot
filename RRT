@@ -1,5 +1,4 @@
 using UnityEngine;
-using System.Collections;
 using System.Collections.Generic;
 
 public class RRT : MonoBehaviour
@@ -9,87 +8,47 @@ public class RRT : MonoBehaviour
     public LayerMask obstacleMask; // Слои препятствий
     public float stepSize = 1f; // Размер шага
     public float moveSpeed = 5f; // Скорость перемещения
+    public int maxIterations = 5000; // Максимальное количество итераций
 
     private List<Vector3> nodes = new List<Vector3>(); // Список узлов дерева
-    private List<List<Vector3>> branches = new List<List<Vector3>>(); // Ветви дерева
     private List<Vector3> path = new List<Vector3>(); // Путь к цели
-    private int currentPathIndex = 0; // Текущий индекс узла в пути
-
-    private bool isRunning = true; // Флаг, определяющий, идет ли процесс поиска пути
+    private bool isRunning = false; // Флаг, определяющий, идет ли процесс поиска пути
 
     void Start()
     {
-        StartCoroutine(BuildRRT());
+        FindPath();
     }
 
-    IEnumerator BuildRRT()
+    void FindPath()
     {
+        isRunning = true;
+
         nodes.Clear();
-        branches.Clear();
-        path.Clear();
         nodes.Add(start.position);
-        branches.Add(new List<Vector3>());
-        branches[0].Add(start.position);
 
-        int iterations = 1000; // Количество итераций алгоритма
+        int iterations = 0;
 
-        for (int i = 0; i < iterations; i++)
+        while (iterations < maxIterations)
         {
-            // Случайно выбираем точку в пространстве
             Vector3 randomPoint = GetRandomPoint();
-
-            // Находим ближайший узел в дереве к случайной точке
             Vector3 nearestNode = GetNearestNode(randomPoint);
-
-            // Находим новый узел, двигаясь от ближайшего узла в сторону случайной точки
             Vector3 newNode = MoveTowards(nearestNode, randomPoint, stepSize);
 
-            // Проверяем, не столкнулись ли с препятствием на пути к новому узлу
             if (!ObstacleInPath(nearestNode, newNode))
             {
-                // Добавляем новый узел в дерево
                 nodes.Add(newNode);
-                branches.Add(new List<Vector3>());
-                branches[branches.Count - 1].Add(nearestNode);
-                branches[branches.Count - 1].Add(newNode);
 
-                // Если новый узел достаточно близок к цели, завершаем алгоритм
                 if (Vector3.Distance(newNode, goal.position) < stepSize)
                 {
-                    branches.Add(new List<Vector3>());
-                    branches[branches.Count - 1].Add(newNode);
-                    branches[branches.Count - 1].Add(goal.position);
+                    path = ConstructPath();
                     break;
                 }
             }
 
-            yield return null;
+            iterations++;
         }
 
-        // Находим путь к цели
-        path = FindPath();
         isRunning = false;
-    }
-
-    void Update()
-    {
-        // Если путь к цели найден, перемещаемся по нему
-        if (!isRunning && path.Count > 0)
-        {
-            if (currentPathIndex < path.Count)
-            {
-                Vector3 targetPosition = path[currentPathIndex];
-                targetPosition.y = transform.position.y; // Сохраняем высоту
-
-                transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
-
-                // Если достигли узла, увеличиваем индекс
-                if (transform.position == targetPosition)
-                {
-                    currentPathIndex++;
-                }
-            }
-        }
     }
 
     Vector3 GetRandomPoint()
@@ -105,83 +64,4 @@ public class RRT : MonoBehaviour
         float minDist = Mathf.Infinity;
         Vector3 nearestNode = Vector3.zero;
 
-        foreach (Vector3 node in nodes)
-        {
-            float dist = Vector3.Distance(node, point);
-            if (dist < minDist)
-            {
-                minDist = dist;
-                nearestNode = node;
-            }
-        }
-
-        return nearestNode;
-    }
-
-    Vector3 MoveTowards(Vector3 from, Vector3 to, float maxDistance)
-    {
-        // Двигаемся от точки from к точке to не дальше, чем maxDistance
-        Vector3 direction = to - from;
-        float distance = Mathf.Min(maxDistance, direction.magnitude);
-        return from + direction.normalized * distance;
-    }
-
-    bool ObstacleInPath(Vector3 from, Vector3 to)
-    {
-        // Проверяем, есть ли препятствие на пути от точки from к точке to
-        Vector3 direction = to - from;
-        RaycastHit hit;
-
-        if (Physics.Raycast(from, direction, out hit, direction.magnitude, obstacleMask))
-        {
-            return true;
-        }
-
-        return false;
-    }
-
-    List<Vector3> FindPath()
-    {
-        // Находим путь от начала к цели
-        List<Vector3> path = new List<Vector3>();
-        path.Add(goal.position);
-
-        Vector3 currentNode = goal.position;
-        while (currentNode != start.position)
-        {
-            foreach (List<Vector3> branch in branches)
-            {
-                if (branch.Contains(currentNode))
-                {
-                    path.Insert(0, branch[0]);
-                    currentNode = branch[0];
-                    break;
-                }
-            }
-        }
-
-        return path;
-    }
-
-    void OnDrawGizmos()
-    {
-        // Отрисовываем дерево и найденный путь
-        foreach (List<Vector3> branch in branches)
-        {
-            for (int i = 0; i < branch.Count - 1; i++)
-            {
-                Gizmos.color = Color.blue;
-                Gizmos.DrawLine(branch[i], branch[i + 1]);
-            }
-        }
-
-        Gizmos.color = Color.red;
-        Gizmos.DrawSphere(goal.position, 1f);
-
-        Gizmos.color = Color.green;
-        foreach (Vector3 node in nodes)
-        {
-            Gizmos.DrawSphere(node, 0.5f);
-        }
-    }
-}
+        foreach (Vector3 node in
