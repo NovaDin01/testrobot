@@ -64,4 +64,109 @@ public class RRT : MonoBehaviour
         float minDist = Mathf.Infinity;
         Vector3 nearestNode = Vector3.zero;
 
-        foreach (Vector3 node in
+        foreach (Vector3 node in nodes)
+        {
+            float dist = Vector3.Distance(node, point);
+            if (dist < minDist)
+            {
+                minDist = dist;
+                nearestNode = node;
+            }
+        }
+
+        return nearestNode;
+    }
+
+    Vector3 MoveTowards(Vector3 from, Vector3 to, float maxDistance)
+    {
+        // Двигаемся от точки from к точке to не дальше, чем maxDistance
+        Vector3 direction = to - from;
+        float distance = Mathf.Min(maxDistance, direction.magnitude);
+        return from + direction.normalized * distance;
+    }
+
+    bool ObstacleInPath(Vector3 from, Vector3 to)
+    {
+        // Проверяем, есть ли препятствие на пути от точки from к точке to
+        Vector3 direction = to - from;
+        RaycastHit hit;
+
+        if (Physics.Raycast(from, direction, out hit, direction.magnitude, obstacleMask))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    List<Vector3> ConstructPath()
+    {
+        // Строим путь от начала к цели
+        List<Vector3> path = new List<Vector3>();
+        path.Add(goal.position);
+
+        Vector3 currentNode = goal.position;
+        while (currentNode != start.position)
+        {
+            foreach (Vector3 node in nodes)
+            {
+                if (Vector3.Distance(node, currentNode) < stepSize)
+                {
+                    path.Insert(0, node);
+                    currentNode = node;
+                    break;
+                }
+            }
+        }
+
+        return path;
+    }
+
+    void Update()
+    {
+        if (!isRunning && path.Count > 0)
+        {
+            MoveAlongPath();
+        }
+    }
+
+    void MoveAlongPath()
+    {
+        if (path.Count <= 0)
+        {
+            return;
+        }
+
+        Vector3 targetPosition = path[0];
+        targetPosition.y = transform.position.y;
+
+        transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
+
+        if (transform.position == targetPosition)
+        {
+            path.RemoveAt(0);
+        }
+    }
+
+    void OnDrawGizmos()
+    {
+        // Отрисовываем путь
+        Gizmos.color = Color.blue;
+        for (int i = 0; i < path.Count - 1; i++)
+        {
+            Gizmos.DrawLine(path[i], path[i + 1]);
+        }
+
+        // Отрисовываем узлы
+        Gizmos.color = Color.green;
+        foreach (Vector3 node in nodes)
+        {
+            Gizmos.DrawSphere(node, 0.5f);
+        }
+
+        // Отрисовываем старт и финиш
+        Gizmos.color = Color.red;
+        Gizmos.DrawSphere(start.position, 0.5f);
+        Gizmos.DrawSphere(goal.position, 0.5f);
+    }
+}
