@@ -1,0 +1,176 @@
+using UnityEngine;
+using System.Collections.Generic;
+
+public class RRT : MonoBehaviour
+{
+    public Transform target; // Цель (выход из лабиринта)
+    public LayerMask obstacleMask; // Слои препятствий
+    public float nodeRadius = 1f; // Радиус узла графа
+    public float stepSize = 1f; // Размер шага
+    public GameObject nodePrefab; // Префаб узла для визуализации
+    public Material lineMaterial; // Материал для отрисовки линий
+
+    private List<Node> graph = new List<Node>(); // Граф лабиринта
+    private Node startNode; // Стартовый узел
+    private Node targetNode; // Узел, ведущий к выходу
+    private List<Node> path = new List<Node>(); // Путь к выходу
+    private int currentPathIndex = 0; // Текущий индекс узла в пути
+
+    void Start()
+    {
+        // Создаем граф лабиринта
+        CreateGraph();
+
+        // Находим стартовый и целевой узлы
+        startNode = GetNearestNode(transform.position);
+        targetNode = GetNearestNode(target.position);
+
+        // Находим путь к цели
+        path = FindPath(startNode, targetNode);
+    }
+
+    void Update()
+    {
+        // Если путь к цели найден, перемещаемся вдоль него
+        if (path.Count > 0)
+        {
+            if (currentPathIndex < path.Count)
+            {
+                Vector3 targetPosition = path[currentPathIndex].worldPosition;
+                targetPosition.y = transform.position.y; // Сохраняем высоту
+
+                transform.position = Vector3.MoveTowards(transform.position, targetPosition, Time.deltaTime * stepSize);
+
+                // Если достигли узла, увеличиваем индекс
+                if (Vector3.Distance(transform.position, targetPosition) < 0.01f)
+                {
+                    currentPathIndex++;
+                }
+            }
+        }
+    }
+
+    void CreateGraph()
+    {
+        // Добавляем стартовый узел в граф
+        graph.Add(new Node(transform.position));
+
+        // Получаем границы лабиринта
+        Bounds bounds = new Bounds(transform.position, Vector3.one * 100f);
+
+        // Создаем граф лабиринта на основе препятствий
+        for (float x = bounds.min.x; x < bounds.max.x; x += nodeRadius * 2)
+        {
+            for (float z = bounds.min.z; z < bounds.max.z; z += nodeRadius * 2)
+            {
+                Vector3 point = new Vector3(x, 0f, z);
+                bool isObstacle = Physics.CheckSphere(point, nodeRadius, obstacleMask);
+                if (!isObstacle)
+                {
+                    graph.Add(new Node(point));
+                }
+            }
+        }
+    }
+
+    List<Node> FindPath(Node start, Node goal)
+    {
+        List<Node> path = new List<Node>();
+
+        // Итерационное построение дерева
+        for (int i = 0; i < 1000; i++) // Ограничиваем число итераций для предотвращения зацикливания
+        {
+            Node randomNode = GetRandomNode();
+            Node nearestNode = GetNearestNode(randomNode.worldPosition);
+
+            Vector3 newPoint = Vector3.MoveTowards(nearestNode.worldPosition, randomNode.worldPosition, stepSize);
+
+            // Проверяем, не столкнулись ли с препятствием
+            if (!Physics.CheckSphere(newPoint, nodeRadius, obstacleMask))
+            {
+                Node newNode = new Node(newPoint);
+                newNode.parent = nearestNode;
+                graph.Add(newNode);
+
+                // Визуализируем линию между узлами
+                Debug.DrawLine(nearestNode.worldPosition, newNode.worldPosition, Color.green, 0.1f);
+
+                // Проверяем, достигли ли мы цели
+                if (Vector3.Distance(newPoint, goal.worldPosition) < nodeRadius)
+                {
+                    if (!IsPathObstructed(newPoint, goal.worldPosition)) // Дополнительная проверка на доступность целевого узла
+                    {
+                        return BuildPath(newNode); // Строим путь и возвращаем его
+                    }
+                }
+            }
+        }
+
+        return path; // Если не удалось найти путь, возвращаем пустой список
+    }
+
+    bool IsPathObstructed(Vector3 start, Vector3 end)
+    {
+        // Проверяем, есть ли препятствия между двумя точками
+        RaycastHit hit;
+        if (Physics.Linecast(start, end, out hit, obstacleMask))
+        {
+            return true; // Препятствие обнаружено
+        }
+        return false; // Препятствие не обнаружено
+    }
+
+    List<Node> BuildPath(Node endNode)
+    {
+        List<Node> path = new List<Node>();
+        Node currentNode = endNode;
+
+        while (currentNode != null)
+        {
+            path.Add(currentNode);
+            currentNode = currentNode.parent;
+        }
+
+        path.Reverse();
+        return path;
+    }
+
+    Node GetRandomNode()
+    {
+        // Генерируем случайную позицию в пределах лабиринта
+        float x = Random.Range(-45f, 45f);
+        float z = Random.Range(-45f, 45f);
+        return new Node(new Vector3(x, 0f, z));
+    }
+
+    Node GetNearestNode(Vector3 position)
+    {
+        Node nearestNode = null;
+        float shortestDistance = Mathf.Infinity;
+
+        foreach (Node node in graph)
+        {
+            float distance = Vector3.Distance(position, node.worldPosition);
+            if (distance < shortestDistance)
+            {
+                shortestDistance = distance;
+                nearestNode = node;
+            }
+        }
+
+        return nearestNode;
+    }
+
+    // Представление узла
+    public class Node
+    {
+        public Vector3 worldPosition;
+        public Node parent;
+
+        public Node(Vector3 position)
+        {
+            worldPosition = position;
+            parent = null;
+        }
+    }
+}
