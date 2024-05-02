@@ -9,6 +9,7 @@ public class DStarLite : MonoBehaviour
     public float nodeSize = 1f;
 
     private List<Node> path;
+    private int currentNodeIndex = 0;
 
     void Start()
     {
@@ -83,14 +84,17 @@ public class DStarLite : MonoBehaviour
 
     IEnumerator FollowPath()
     {
-        foreach (Node node in path)
+        currentNodeIndex = 0;
+        while (currentNodeIndex < path.Count)
         {
-            Vector3 nextPos = WorldPosFromGridPos(new Vector2Int(node.gridX, node.gridY));
+            Vector3 nextPos = WorldPosFromGridPos(new Vector2Int(path[currentNodeIndex].gridX, path[currentNodeIndex].gridY));
             while (Vector3.Distance(transform.position, nextPos) > 0.05f)
             {
                 transform.position = Vector3.MoveTowards(transform.position, nextPos, Time.deltaTime * 5f);
                 yield return null;
             }
+            currentNodeIndex++;
+            yield return null;
         }
     }
 
