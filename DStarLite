@@ -107,7 +107,6 @@ public class DStarLiteTest : MonoBehaviour
 
         // Приоритетная очередь
         SortedSet<Node> openSet = new SortedSet<Node>(new NodeComparer());
-
         openSet.Add(goalNode);
 
         while (openSet.Count > 0 && (openSet.Min.key.CompareTo(CalculateKey(startNode)) < 0 || startNode.rhs != startNode.g))
