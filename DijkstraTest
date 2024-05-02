@@ -1,0 +1,167 @@
+using UnityEngine;
+using System.Collections.Generic;
+
+public class DijkstraTest : MonoBehaviour
+{
+    public Transform target; // Цель (выход из лабиринта)
+    public LayerMask obstacleMask; // Слои препятствий
+    public float nodeRadius = 1f; // Радиус узла графа
+    public float movementSpeed = 5f; // Скорость перемещения
+
+    private List<Node> graph = new List<Node>(); // Граф лабиринта
+    private Node startNode; // Стартовый узел
+    private Node targetNode; // Узел, ведущий к выходу
+    private List<Node> path = new List<Node>(); // Путь к выходу
+
+    void Start()
+    {
+        // Создаем граф лабиринта
+        CreateGraph();
+
+        // Находим стартовый и целевой узлы
+        startNode = GetNearestNode(transform.position);
+        targetNode = GetNearestNode(target.position);
+
+        // Находим кратчайший путь к выходу
+        path = Dijkstra(startNode, targetNode);
+    }
+
+    void Update()
+    {
+        // Если путь к цели найден, перемещаемся вдоль него
+        if (path.Count > 0)
+        {
+            Node nextNode = path[0];
+            Vector3 nextPosition = nextNode.worldPosition;
+            nextPosition.y = transform.position.y; // Не изменять высоту
+
+            transform.position = Vector3.MoveTowards(transform.position, nextPosition, movementSpeed * Time.deltaTime);
+
+            // Если достигли узла, удаляем его из пути
+            if (transform.position == nextPosition)
+            {
+                path.RemoveAt(0);
+            }
+        }
+    }
+
+    void CreateGraph()
+    {
+        // Получаем границы лабиринта
+        Bounds bounds = new Bounds(transform.position, Vector3.one * 100f);
+
+        // Создаем граф лабиринта на основе препятствий
+        for (float x = bounds.min.x; x < bounds.max.x; x += nodeRadius * 2)
+        {
+            for (float z = bounds.min.z; z < bounds.max.z; z += nodeRadius * 2)
+            {
+                Vector3 point = new Vector3(x, 0f, z);
+                bool isObstacle = Physics.CheckSphere(point, nodeRadius, obstacleMask);
+                if (!isObstacle)
+                {
+                    Node node = new Node(point);
+                    graph.Add(node);
+                }
+            }
+        }
+
+        // Связываем узлы
+        foreach (Node node in graph)
+        {
+            List<Node> neighbors = new List<Node>();
+            foreach (Node otherNode in graph)
+            {
+                if (node != otherNode && Vector3.Distance(node.worldPosition, otherNode.worldPosition) <= nodeRadius * 2.1f)
+                {
+                    neighbors.Add(otherNode);
+                }
+            }
+            node.neighbors = neighbors;
+        }
+    }
+
+    List<Node> Dijkstra(Node start, Node end)
+    {
+        Dictionary<Node, float> distances = new Dictionary<Node, float>();
+        Dictionary<Node, Node> previous = new Dictionary<Node, Node>();
+        List<Node> unvisited = new List<Node>();
+
+        foreach (Node node in graph)
+        {
+            distances[node] = Mathf.Infinity;
+            previous[node] = null;
+            unvisited.Add(node);
+        }
+
+        distances[start] = 0;
+
+        while (unvisited.Count > 0)
+        {
+            Node current = null;
+            foreach (Node node in unvisited)
+            {
+                if (current == null || distances[node] < distances[current])
+                {
+                    current = node;
+                }
+            }
+
+            if (current == end)
+                break;
+
+            unvisited.Remove(current);
+
+            foreach (Node neighbor in current.neighbors)
+            {
+                float distance = distances[current] + Vector3.Distance(current.worldPosition, neighbor.worldPosition);
+                if (distance < distances[neighbor])
+                {
+                    distances[neighbor] = distance;
+                    previous[neighbor] = current;
+                }
+            }
+        }
+
+        List<Node> path = new List<Node>();
+        Node currentNode = end;
+        while (currentNode != null)
+        {
+            path.Add(currentNode);
+            currentNode = previous[currentNode];
+        }
+        path.Reverse();
+
+        return path;
+    }
+
+    Node GetNearestNode(Vector3 position)
+    {
+        Node nearestNode = null;
+        float shortestDistance = Mathf.Infinity;
+
+        foreach (Node node in graph)
+        {
+            float distance = Vector3.Distance(position, node.worldPosition);
+            if (distance < shortestDistance)
+            {
+                shortestDistance = distance;
+                nearestNode = node;
+            }
+        }
+
+        return nearestNode;
+    }
+
+    // Представление узла
+    public class Node
+    {
+        public Vector3 worldPosition;
+        public List<Node> neighbors;
+
+        public Node(Vector3 position)
+        {
+            worldPosition = position;
+            neighbors = new List<Node>();
+        }
+    }
+}
