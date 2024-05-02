@@ -11,22 +11,6 @@ public class DStarLite : MonoBehaviour
     private List<Vector3> path = new List<Vector3>(); // Путь к цели
     private int currentPathIndex = 0; // Индекс текущей точки в пути
 
-public class Cell
-{
-    public Vector3 position; // Позиция ячейки
-    public bool isObstacle; // Является ли ячейка препятствием
-    public float cost; // Стоимость перемещения до этой ячейки
-    public Cell parent; // Родительская ячейка для построения пути
-
-    public Cell(Vector3 _position, bool _isObstacle)
-    {
-        position = _position;
-        isObstacle = _isObstacle;
-        cost = Mathf.Infinity; // Начальная стоимость бесконечна
-        parent = null; // По умолчанию у ячейки нет родителя
-    }
-}
-
     private Cell[,] grid; // Сетка для хранения информации о клетках
 
     private void Start()
@@ -73,8 +57,8 @@ public class Cell
         List<Cell> pathCells = new List<Cell>();
 
         // Начальная и конечная клетки
-        Cell startCell = grid[Mathf.RoundToInt(start.position.x), Mathf.RoundToInt(start.position.z)];
-        Cell goalCell = grid[Mathf.RoundToInt(goal.position.x), Mathf.RoundToInt(goal.position.z)];
+        Cell startCell = GetCellFromPosition(start.position);
+        Cell goalCell = GetCellFromPosition(goal.position);
 
         Cell currentCell = startCell;
 
@@ -123,7 +107,6 @@ public class Cell
                 int checkX = Mathf.RoundToInt(cell.position.x) + x;
                 int checkY = Mathf.RoundToInt(cell.position.z) + y;
 
-
                 if (checkX >= 0 && checkX < grid.GetLength(0) && checkY >= 0 && checkY < grid.GetLength(1))
                 {
                     neighbours.Add(grid[checkX, checkY]);
@@ -157,6 +140,15 @@ public class Cell
     {
         // Рассчитываем эвристическую стоимость перемещения от текущей клетки к цели
         return Vector3.Distance(current.position, target.position);
+    }
+
+    private Cell GetCellFromPosition(Vector3 position)
+    {
+        // Находим ячейку из сетки по заданной позиции
+        int x = Mathf.RoundToInt(position.x);
+        int y = Mathf.RoundToInt(position.z);
+
+        return grid[x, y];
     }
 
     private void Update()
@@ -194,20 +186,4 @@ public class Cell
         // Отрисовываем старт и финиш
         Gizmos.color = Color.red;
         Gizmos.DrawSphere(start.position, 0.5f);
-        Gizmos.DrawSphere(goal.position, 0.5f);
-
-        // Отрисовываем сетку
-        if (grid != null)
-        {
-            foreach (Cell cell in grid)
-            {
-                if (cell.isObstacle)
-                {
-                    Gizmos.color = Color.black;
-                    Gizmos.DrawCube(cell.position, Vector3.one * 0.9f);
-                }
-            }
-        }
-    }
-
-    // Класс для представ
+        Gizmos.DrawSphere(goal.position, 0.
