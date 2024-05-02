@@ -7,6 +7,8 @@ public class RRT : MonoBehaviour
     public LayerMask obstacleMask; // Слои препятствий
     public float nodeRadius = 1f; // Радиус узла графа
     public float stepSize = 1f; // Размер шага
+    public GameObject nodePrefab; // Префаб узла для визуализации
+    public Material lineMaterial; // Материал для отрисовки линий
 
     private List<Node> graph = new List<Node>(); // Граф лабиринта
     private Node startNode; // Стартовый узел
@@ -90,6 +92,9 @@ public class RRT : MonoBehaviour
                 newNode.parent = nearestNode;
                 graph.Add(newNode);
 
+                // Визуализируем линию между узлами
+                Debug.DrawLine(nearestNode.worldPosition, newNode.worldPosition, Color.green, 0.1f);
+
                 // Проверяем, достигли ли мы цели
                 if (Vector3.Distance(newPoint, goal.worldPosition) < nodeRadius)
                 {
@@ -152,6 +157,10 @@ public class RRT : MonoBehaviour
         {
             worldPosition = position;
             parent = null;
+
+            // Визуализируем узел
+            GameObject nodeObj = Instantiate(nodePrefab, position, Quaternion.identity);
+            nodeObj.transform.localScale = new Vector3(nodeRadius * 2, nodeRadius * 2, nodeRadius * 2);
         }
     }
 }
