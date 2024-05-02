@@ -186,4 +186,36 @@ public class DStarLite : MonoBehaviour
         // Отрисовываем старт и финиш
         Gizmos.color = Color.red;
         Gizmos.DrawSphere(start.position, 0.5f);
-        Gizmos.DrawSphere(goal.position, 0.
+        Gizmos.DrawSphere(goal.position, 0.5f);
+
+        // Отрисовываем сетку
+        if (grid != null)
+        {
+            foreach (Cell cell in grid)
+            {
+                if (cell.isObstacle)
+                {
+                    Gizmos.color = Color.black;
+                    Gizmos.DrawCube(cell.position, Vector3.one * 0.9f);
+                }
+            }
+        }
+    }
+
+    // Класс для представления ячейки в сетке
+    private class Cell
+    {
+        public Vector3 position; // Позиция ячейки
+        public bool isObstacle; // Является ли ячейка препятствием
+        public float cost; // Стоимость перемещения до этой ячейки
+        public Cell parent; // Родительская ячейка для построения пути
+
+        public Cell(Vector3 _position, bool _isObstacle)
+        {
+            position = _position;
+            isObstacle = _isObstacle;
+            cost = Mathf.Infinity; // Начальная стоимость бесконечна
+            parent = null; // По умолчанию у ячейки нет родителя
+        }
+    }
+}
