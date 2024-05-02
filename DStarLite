@@ -120,8 +120,9 @@ public class Cell
                 if (x == 0 && y == 0)
                     continue;
 
-                int checkX = cell.position.x + x;
-                int checkY = cell.position.z + y;
+                int checkX = Mathf.RoundToInt(cell.position.x) + x;
+                int checkY = Mathf.RoundToInt(cell.position.z) + y;
+
 
                 if (checkX >= 0 && checkX < grid.GetLength(0) && checkY >= 0 && checkY < grid.GetLength(1))
                 {
