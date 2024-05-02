@@ -242,7 +242,8 @@ public class DStarLiteTest : MonoBehaviour
             int result = x.key.Key.CompareTo(y.key.Key);
             if (result == 0)
                 return x.key.Value.CompareTo(y.key.Value);
-            return result;
+            else
+                return result;
         }
     }
 }
