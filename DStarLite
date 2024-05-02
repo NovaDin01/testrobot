@@ -7,20 +7,46 @@ public class DStarLite : MonoBehaviour
     public Transform goalPoint; // Конечная точка
     public LayerMask obstacleMask; // Маска препятствий
     public float obstacleCheckDistance = 1f; // Расстояние между проверками препятствий
+    public float movementSpeed = 2f; // Скорость движения
 
     private List<Node> path;
+    private int currentNodeIndex = 0;
+    private bool isMoving = false;
 
     void Start()
     {
         path = FindPath(startPoint.position, goalPoint.position);
+        if (path != null && path.Count > 0)
+        {
+            isMoving = true;
+        }
     }
 
     void Update()
     {
-        // Визуализируем найденный путь
-        for (int i = 0; i < path.Count - 1; i++)
+        if (isMoving)
         {
-            Debug.DrawLine(path[i].position, path[i + 1].position, Color.green);
+            MoveToNextNode();
+        }
+    }
+
+    void MoveToNextNode()
+    {
+        Vector3 nextPosition = path[currentNodeIndex].position;
+        Vector3 direction = (nextPosition - transform.position).normalized;
+        transform.position += direction * movementSpeed * Time.deltaTime;
+
+        // Проверка, достиг ли кубик следующего узла
+        if (Vector3.Distance(transform.position, nextPosition) < 0.1f)
+        {
+            currentNodeIndex++;
+
+            // Проверка, достиг ли кубик конечной точки
+            if (currentNodeIndex >= path.Count)
+            {
+                isMoving = false;
+                Debug.Log("Путь завершен");
+            }
         }
     }
 
