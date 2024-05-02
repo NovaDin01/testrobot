@@ -1,231 +1,54 @@
-using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine;
 
 public class DStarLite : MonoBehaviour
 {
-    public Transform start; // Начальная позиция
-    public Transform goal; // Цель
-    public LayerMask obstacleMask; // Слои препятствий
-    public float moveSpeed = 5f; // Скорость перемещения
+    public Transform startPoint; // Начальная точка
+    public Transform goalPoint; // Конечная точка
+    public LayerMask obstacleMask; // Маска препятствий
+    public float obstacleCheckDistance = 1f; // Расстояние между проверками препятствий
 
-    private List<Vector3> path = new List<Vector3>(); // Путь к цели
-    private int currentPathIndex = 0; // Индекс текущей точки в пути
+    private List<Node> path;
 
-    private Cell[,] grid; // Сетка для хранения информации о клетках
-
-    private void Start()
+    void Start()
     {
-        InitializeGrid();
-        CalculatePath();
+        path = FindPath(startPoint.position, goalPoint.position);
     }
 
-    private void InitializeGrid()
+    void Update()
     {
-        // Определяем размер сетки в зависимости от размеров сцены
-        int width = Mathf.RoundToInt(transform.localScale.x);
-        int height = Mathf.RoundToInt(transform.localScale.z);
-
-        grid = new Cell[width, height];
-
-        // Заполняем сетку клетками
-        for (int x = 0; x < width; x++)
-        {
-            for (int y = 0; y < height; y++)
-            {
-                Vector3 cellPosition = new Vector3(x, 0, y);
-                bool isObstacle = Physics.CheckSphere(cellPosition, 0.5f, obstacleMask);
-                grid[x, y] = new Cell(cellPosition, isObstacle);
-            }
-        }
-    }
-
-    private void CalculatePath()
-    {
-        // Запускаем алгоритм поиска пути
-        List<Cell> pathCells = DStarLiteAlgorithm();
-
-        // Преобразуем путь из ячеек в координаты
-        foreach (Cell cell in pathCells)
-        {
-            path.Add(cell.position);
-        }
-    }
-
-    private List<Cell> DStarLiteAlgorithm()
-    {
-        // Реализация D-star Lite алгоритма
-        List<Cell> pathCells = new List<Cell>();
-
-        // Начальная и конечная клетки
-        Cell startCell = GetCellFromPosition(start.position);
-        Cell goalCell = GetCellFromPosition(goal.position);
-
-        Cell currentCell = startCell;
-
-        while (currentCell != goalCell)
-        {
-            // Получаем соседние клетки
-            List<Cell> neighbours = GetNeighbours(currentCell);
-
-            // Рассчитываем стоимость перемещения до соседних клеток
-            foreach (Cell neighbour in neighbours)
-            {
-                float newCost = currentCell.cost + HeuristicCost(currentCell, neighbour);
-                if (newCost < neighbour.cost || neighbour.cost == Mathf.Infinity)
-                {
-                    neighbour.cost = newCost;
-                    neighbour.parent = currentCell;
-                }
-            }
-
-            // Выбираем следующую клетку для перемещения
-            currentCell = GetNextCell(currentCell, goalCell);
-
-            // Проверяем, не достигли ли конечной клетки
-            if (currentCell == null)
-            {
-                Debug.LogError("Путь невозможно построить.");
-                return pathCells;
-            }
-        }
-
-        // Формируем путь из клеток, начиная с конечной и двигаясь к начальной
-        while (currentCell != null)
-        {
-            pathCells.Insert(0, currentCell);
-            currentCell = currentCell.parent;
-        }
-
-        return pathCells;
-    }
-
-    private List<Cell> GetNeighbours(Cell cell)
-    {
-        // Получаем соседние клетки
-        List<Cell> neighbours = new List<Cell>();
-
-        for (int x = -1; x <= 1; x++)
-        {
-            for (int y = -1; y <= 1; y++)
-            {
-                if (x == 0 && y == 0)
-                    continue;
-
-                int checkX = Mathf.RoundToInt(cell.position.x) + x;
-                int checkY = Mathf.RoundToInt(cell.position.z) + y;
-
-                if (checkX >= 0 && checkX < grid.GetLength(0) && checkY >= 0 && checkY < grid.GetLength(1))
-                {
-                    neighbours.Add(grid[checkX, checkY]);
-                }
-            }
-        }
-
-        return neighbours;
-    }
-
-    private Cell GetNextCell(Cell current, Cell goal)
-    {
-        // Находим следующую клетку для перемещения
-        List<Cell> neighbours = GetNeighbours(current);
-        Cell nextCell = null;
-        float minCost = Mathf.Infinity;
-
-        foreach (Cell neighbour in neighbours)
-        {
-            if (neighbour.cost < minCost)
-            {
-                minCost = neighbour.cost;
-                nextCell = neighbour;
-            }
-        }
-
-        return nextCell;
-    }
-
-    private float HeuristicCost(Cell current, Cell target)
-    {
-        // Рассчитываем эвристическую стоимость перемещения от текущей клетки к цели
-        return Vector3.Distance(current.position, target.position);
-    }
-
-    private Cell GetCellFromPosition(Vector3 position)
-    {
-        // Находим ячейку из сетки по заданной позиции
-        int x = Mathf.RoundToInt(position.x);
-        int y = Mathf.RoundToInt(position.z);
-
-        x = Mathf.Clamp(x, 0, grid.GetLength(0) - 1); // Ограничиваем x
-        y = Mathf.Clamp(y, 0, grid.GetLength(1) - 1); // Ограничиваем y
-
-        return grid[x, y];
-    }
-
-    private void Update()
-    {
-        // Двигаемся по пути, если он найден
-        if (path.Count > 0 && currentPathIndex < path.Count)
-        {
-            MoveToNextPoint();
-        }
-    }
-
-    private void MoveToNextPoint()
-    {
-        // Двигаемся к следующей точке пути
-        Vector3 targetPosition = path[currentPathIndex];
-        targetPosition.y = transform.position.y;
-        transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
-
-        // Проверяем, достигли ли следующей точки пути
-        if (Vector3.Distance(transform.position, targetPosition) < 0.01f)
-        {
-            currentPathIndex++;
-        }
-    }
-
-    private void OnDrawGizmos()
-    {
-        // Отрисовываем путь
-        Gizmos.color = Color.blue;
+        // Визуализируем найденный путь
         for (int i = 0; i < path.Count - 1; i++)
         {
-            Gizmos.DrawLine(path[i], path[i + 1]);
-        }
-
-        // Отрисовываем старт и финиш
-        Gizmos.color = Color.red;
-        Gizmos.DrawSphere(start.position, 0.5f);
-        Gizmos.DrawSphere(goal.position, 0.5f);
-
-        // Отрисовываем сетку
-        if (grid != null)
-        {
-            foreach (Cell cell in grid)
-            {
-                if (cell.isObstacle)
-                {
-                    Gizmos.color = Color.black;
-                    Gizmos.DrawCube(cell.position, Vector3.one * 0.9f);
-                }
-            }
+            Debug.DrawLine(path[i].position, path[i + 1].position, Color.green);
         }
     }
 
-    // Класс для представления ячейки в сетке
-    private class Cell
+    List<Node> FindPath(Vector3 start, Vector3 goal)
     {
-        public Vector3 position; // Позиция ячейки
-        public bool isObstacle; // Является ли ячейка препятствием
-        public float cost; // Стоимость перемещения до этой ячейки
-        public Cell parent; // Родительская ячейка для построения пути
+        // TODO: Реализовать алгоритм D* Lite
 
-        public Cell(Vector3 _position, bool _isObstacle)
+        List<Node> newPath = new List<Node>();
+        // Временно, для примера, используем простой путь от старта до цели
+        newPath.Add(new Node(start));
+        newPath.Add(new Node(goal));
+        return newPath;
+    }
+
+    // Проверка, является ли позиция препятствием
+    bool IsObstacle(Vector3 position)
+    {
+        return Physics.CheckSphere(position, obstacleCheckDistance, obstacleMask);
+    }
+
+    // Вспомогательный класс для представления узла (позиции)
+    public class Node
+    {
+        public Vector3 position;
+
+        public Node(Vector3 _position)
         {
             position = _position;
-            isObstacle = _isObstacle;
-            cost = Mathf.Infinity; // Начальная стоимость бесконечна
-            parent = null; // По умолчанию у ячейки нет родителя
         }
     }
 }
