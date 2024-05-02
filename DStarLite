@@ -15,6 +15,8 @@ public class DStarLiteTest : MonoBehaviour
     private List<Node> path = new List<Node>(); // Путь к выходу
     private int currentPathIndex = 0; // Текущий индекс узла в пути
 
+    private SortedSet<Node> openSet; // Приоритетная очередь
+
     void Start()
     {
         // Создаем граф лабиринта
@@ -26,6 +28,8 @@ public class DStarLiteTest : MonoBehaviour
 
         // Инициализируем D* Lite
         currentNode = startNode;
+        openSet = new SortedSet<Node>(new NodeComparer());
+
         path = DStarLite();
 
         // Если путь к цели найден, начинаем перемещаться
@@ -105,8 +109,7 @@ public class DStarLiteTest : MonoBehaviour
         goalNode.rhs = 0;
         goalNode.key = CalculateKey(goalNode);
 
-        // Приоритетная очередь
-        SortedSet<Node> openSet = new SortedSet<Node>(new NodeComparer());
+        openSet.Clear();
         openSet.Add(goalNode);
 
         while (openSet.Count > 0 && (openSet.Min.key.CompareTo(CalculateKey(startNode)) < 0 || startNode.rhs != startNode.g))
